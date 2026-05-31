@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isAdmin() {
+      // Allow the specific user an admin override temporarily if needed, or check role from db
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null && request.auth.uid != null; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'createdAt', 'updatedAt', 'role']) &&
+             data.createdAt is number &&
+             data.updatedAt is number &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidChatSession(data) {
+      return data.keys().hasAll(['userId', 'title', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() <= 256 &&
+             data.createdAt is number &&
+             data.updatedAt is number;
+    }
+
+    function isValidPrediction(data) {
+      return data.keys().hasAll(['userId', 'imageUrl', 'prediction', 'confidence', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.imageUrl is string && 
+             data.prediction is string &&
+             (data.confidence is number || data.confidence is string) &&
+             data.createdAt is number &&
+             data.updatedAt is number;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && 
+                    request.auth.uid == userId &&
+                    isValidId(userId) &&
+                    isValidUser(incoming()) &&
+                    incoming().role == 'user';
+      allow update: if isSignedIn() && 
+                    (request.auth.uid == userId || isAdmin()) &&
+                    isValidId(userId) &&
+                    isValidUser(incoming()) &&
+                    incoming().createdAt == existing().createdAt &&
+                    (isAdmin() || incoming().role == existing().role) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']); 
+      allow delete: if isAdmin();
+
+      match /chats/{chatId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && 
+                      request.auth.uid == userId && 
+                      isValidId(userId) && 
+                      isValidId(chatId) &&
+                      isValidChatSession(incoming()) &&
+                      incoming().userId == request.auth.uid;
+        allow update: if isSignedIn() && 
+                      request.auth.uid == userId && 
+                      isValidId(userId) && 
+                      isValidId(chatId) &&
+                      isValidChatSession(incoming()) &&
+                      incoming().userId == existing().userId &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'title', 'messages']);
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /predictions/{predictionId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn() && 
+                      request.auth.uid == userId && 
+                      isValidId(userId) && 
+                      isValidId(predictionId) &&
+                      isValidPrediction(incoming()) &&
+                      incoming().userId == request.auth.uid;
+        allow update: if isSignedIn() && 
+                      request.auth.uid == userId && 
+                      isValidId(userId) && 
+                      isValidId(predictionId) &&
+                      isValidPrediction(incoming()) &&
+                      incoming().userId == existing().userId &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().imageUrl == existing().imageUrl &&
+                      incoming().prediction == existing().prediction &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt', 'notes']);
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

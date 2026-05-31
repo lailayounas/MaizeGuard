@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "createdAt": { "type": "number", "description": "Timestamp" },
+        "updatedAt": { "type": "number", "description": "Timestamp" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["email", "createdAt", "updatedAt", "role"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A chat session between user and AI",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "messages": {
+          "type": "array",
+          "items": { "$ref": "#/entities/ChatMessage" }
+        }
+      },
+      "required": ["userId", "title", "createdAt", "updatedAt"]
+    },
+    "DiseasePrediction": {
+      "title": "DiseasePrediction",
+      "description": "A maize disease prediction record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "prediction": { "type": "string", "enum": ["Blight", "Common Rust", "Grey Leaf Spot", "Healthy"] },
+        "confidence": { "type": "number" },
+        "details": { "type": "string" },
+        "treatment": { "type": "string" },
+        "prevention": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "imageUrl", "prediction", "confidence", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Global user profiles"
+    },
+    "/users/{userId}/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "User chat sessions"
+    },
+    "/users/{userId}/predictions/{predictionId}": {
+      "schema": { "$ref": "#/entities/DiseasePrediction" },
+      "description": "User disease predictions"
+    }
+  }
+}
